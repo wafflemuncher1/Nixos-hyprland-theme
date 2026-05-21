@@ -1,0 +1,11 @@
+
+
+.env
+.env.*
+**/.env
+**/.env.*
+
+commit.txt
+config/programs/eww/hotfile-eww/*
+
+config/sessions/hyprland/scripts/quickshell/quickactions/Todo.qml
