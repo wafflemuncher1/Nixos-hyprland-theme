@@ -205,4 +205,5 @@ matugen image /path/to/your/wallpaper.jpg
 - [Quickshell](https://quickshell.outfoxxed.me) — Shell UI framework
 - [midnight-discord](https://github.com/refact0r/midnight-discord) — Discord theme base
 - [ArcMidnight Cursors](https://github.com/yeyushengfan258/ArcMidnight-Cursors) — Cursor theme
+- [Ilyamiro] (https://github.com/ilyamiro/nixos-configuration) — Main inspo for hyprland theme, please go support him
 ---
