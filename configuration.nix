@@ -2,26 +2,135 @@
 # your system. Help is available in the configuration.nix(5) man page
 # and in the NixOS manual (accessible by running ‘nixos-help’).
 
-{ config, pkgs, lib, ... }:
+{ config, pkgs, lib, inputs, ... }:
+
+
+let
+  spicePkgs = inputs.spicetify-nix.legacyPackages.${pkgs.system};
+in
+
 
 {
   # Imports
   imports =
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
-      <home-manager/nixos>
-    ];
+       inputs.spicetify-nix.nixosModules.default    
+   ];
 
-  home-manager.backupFileExtension = "backup";
+ 
+
+
+
+  programs.spicetify = {
+    enable = true;
+
+# This allows the Marketplace to function better within the Nix sandbox
+      
+ 
+    # This replaces the 'current_theme' error
+    theme = spicePkgs.themes.starryNight; 
+    colorScheme = "Galaxy";
+
+    enabledExtensions = with spicePkgs.extensions; [
+      adblock
+      shuffle
+    ];
+    
+    enabledCustomApps = with spicePkgs.apps; [
+      marketplace
+    ];
+  };
+ 
+
+  
+  
+# This creates the encrypted tunnel that hides your traffic from the school
+  # The WireGuard Tunnel
+
+
+home-manager.backupFileExtension = "backup";
+  
+  # Essential for VPNs on NixOS to prevent "routing loops"
+  networking.firewall.checkReversePath = false;
+
+networking.networkmanager.wifi.scanRandMacAddress = true;
+
+  # 2. Define the WireGuard interface
+  networking.wg-quick.interfaces.proton0 = {
+    # Set autostart to false while testing so you don't get stuck in a boot loop!
+    autostart = false; 
+    
+    # Internal VPN IP addresses (from your Proton config)
+    address = [ "10.2.0.2/32" "2a07:b944::2:2/128" ];
+
+    # USE PUBLIC DNS HERE to prevent the "No Internet" issue
+    # This ensures your computer can always find websites even if Proton's DNS is slow
+    dns = [ "1.1.1.1" "9.9.9.9" ]; 
+
+    privateKeyFile = "/etc/nixos/wireguard_private.key";
+    
+    # Lower MTU is essential for restricted school networks to prevent packet loss
+    mtu = 1280;
+
+    peers = [
+      {
+        # Your specific Proton server public key
+        publicKey = "VZghTYxgyeiYtJ8HcBRaOFRnRjqSoNYMHVSoOQLz3gA=";
+        
+        # This forces ALL traffic into the tunnel
+        allowedIPs = [ "0.0.0.0/0" "::/0" ];
+        
+        # Using Port 443 (HTTPS port) makes the VPN look like normal web traffic
+        endpoint = "95.173.217.65:443"; 
+        
+        persistentKeepalive = 25;
+      }
+    ];
+  };
+
+  # 3. Extra privacy: Force system-wide DNS to be handled safely
+  services.resolved.enable = true;
+
+
+
+networking.dhcpcd.extraConfig = "nohook resolv.conf";
+
+networking.networkmanager.dns = "systemd-resolved";
+services.tailscale.enable = true;
+
+services.nextdns.enable = true;
+services.nextdns.arguments = [ "-config" "e82b95" "-report-client-info" ];
+
+services.tor.enable = true;
+services.tor.client.enable = true;
+
+
+    programs.wireshark = {
+    enable = true;
+    package = (import <nixpkgs-stable> { config = config.nixpkgs.config; }).wireshark;
+   
+};
 
   # System packages
   environment.systemPackages = with pkgs; [
-    wget 
+#Apps
+
+    wget
+    android-tools 
     taskwarrior3
     inotify-tools
     file
     pipes 
     cbonsai
+    proton-vpn-cli
+    tor
+    vesktop
+    wofi
+    nextdns
+    tailscale
+    tor-browser
+    torsocks
     git
     killall
     btop  
@@ -33,22 +142,20 @@
     fzf
     direnv
     zbar
-    python311
     ffmpeg
-    python314
     (wrapFirefox (pkgs.firefox-unwrapped.override { pipewireSupport = true; }) {})
-    telegram-desktop
+    vscode
     kitty
     libreoffice-qt
-    hunspell
-    hunspellDicts.ru_RU
-    hunspellDicts.en_US
     obsidian
-    obs-studio
+    discord
+    
+    gh
     p7zip
     papers
+    google-chrome
     fastfetch
-    jetbrains.idea-community
+    jetbrains.idea-oss
     quickshell
     gnome-shell-extensions
     grim
@@ -60,23 +167,39 @@
     swappy
     slurp
     mpvpaper
+    swww
+    awww
     gnome-tweaks
     pkgsCross.mingwW64.stdenv.cc
     wmctrl
-    bottles
+   # bottles
     qbittorrent
     power-profiles-daemon
     jdk8
     steam-run
+#hacking things
+    nmap
+    sherlock
   ];
+
+systemd.user.services.awww-daemon = {
+  description = "Awww wallpaper daemon";
+  wantedBy = [ "graphical-session.target" ];
+  partOf = [ "graphical-session.target" ];
+  serviceConfig = {
+    ExecStart = "${pkgs.awww}/bin/awww-daemon";
+    Restart = "always";
+    RestartSec = "5";
+  };
+};
 
   environment.pathsToLink = [ "/share/gsettings-schemas" ];
 
   # User accounts and security
-  users.users.ilyamiro = {
+  users.users.waffle = {
     isNormalUser = true;
-    description = "ilyamiro";
-    extraGroups = [ "networkmanager" "wheel" "video" "adbusers" "libvirtd"]; 
+    description = "waffle";
+    extraGroups = [ "networkmanager" "wheel" "video" "wireshark"  "adbusers" "libvirtd"]; 
     packages = with pkgs; [
     #  thunderbird
     ];
@@ -84,14 +207,12 @@
     shell = pkgs.zsh;
   };    
 
-programs.ssh.startAgent = true;
-
   users.defaultUserShell = pkgs.zsh;
   system.userActivationScripts.zshrc = "touch .zshrc";
 
   security.sudo.extraRules = [
     {
-      users = [ "ilyamiro" ];
+      users = [ "waffle" ];
       commands = [
         {
           command = "ALL";
@@ -107,7 +228,7 @@ programs.ssh.startAgent = true;
   # Program configurations
   programs.zsh.enable = true;
 
-  programs.adb.enable = true;
+ # programs.adb.enable = true;
 
   # Install firefox.
   programs.firefox.enable = true;
@@ -127,9 +248,7 @@ programs.ssh.startAgent = true;
   home-manager.useGlobalPkgs = true;
   home-manager.useUserPackages = true; 
   
-  home-manager.users.ilyamiro = {
-    imports = [ ./home.nix ];
-  };
+  
 
   # Desktop environment, window managers and theme
   services.xserver.enable = true;
@@ -175,14 +294,14 @@ programs.ssh.startAgent = true;
   # environment.variables.XDG_DATA_DIRS = lib.mkForce "/home/ilyamiro/.nix-profile/share:/run/current-system/sw/share";
 
   # Networking and time
-  networking.hostName = "ilyamiro"; 
+  networking.hostName = "waffle"; 
   
   networking.networkmanager = {
     enable = true;
     wifi.powersave = false; 
   };
    # Set your time zone.
-  time.timeZone = "Europe/Copenhagen";
+  time.timeZone = "America/New_York";
 
   # Select internationalisation properties.
   i18n.defaultLocale = "en_US.UTF-8";
@@ -214,7 +333,7 @@ programs.ssh.startAgent = true;
   services.printing.enable = true;
 
   # Enable the OpenSSH daemon.
-  services.openssh.enable = true;
+ ### services.openssh.enable = true;
 
   # Power Management Services
   services.power-profiles-daemon.enable = true; 
@@ -297,54 +416,13 @@ programs.ssh.startAgent = true;
   # ==========================================
   # GPU / GRAPHICS CONFIGURATION (ADDED)
   # ==========================================
-
-  # Enable OpenGL/Vulkan (renamed to hardware.graphics in 24.11+)
-  hardware.graphics = {
-    enable = true;
-    enable32Bit = true; # Required for Steam/CS2
-  };
-
-  # Load NVIDIA Drivers
-  services.xserver.videoDrivers = [ "nvidia" ];
-
-  hardware.nvidia = {
-    # Modesetting is required.
-    modesetting.enable = true;
-
-    # Nvidia power management. Experimental, and can cause sleep/suspend to fail.
-    # Enable this if you have graphical corruption after suspend/wake.
-    powerManagement.enable = false;
-
-    # Fine-grained power management. Turns off GPU when not in use.
-    # Experimental and only works on modern Nvidia GPUs (Turing or newer).
-    powerManagement.finegrained = true;
-
-    # Use the NVidia open source kernel module (not to be confused with the
-    # independent third-party "nouveau" open source driver).
-    # Support is limited to the Turing and later architectures.
-    # We set to false here for maximum stability on the mobile 3050.
-    open = false;
-
-    # Enable the Nvidia settings menu,
-    # accessible via `nvidia-settings`.
-    nvidiaSettings = true;
-
-    # Select the stable driver version
-    package = config.boot.kernelPackages.nvidiaPackages.stable;
-
-    # PRIME CONFIGURATION (Hybrid Graphics)
-    prime = {
-      offload = {
-        enable = true;
-        enableOffloadCmd = true;
-      };
-      
       # Bus IDs derived from your lspci output
       # NVIDIA: 01:00.0 -> PCI:1:0:0
       # AMD: 04:00.0 -> PCI:4:0:0
-      nvidiaBusId = "PCI:1:0:0";
-      amdgpuBusId = "PCI:4:0:0";
-    };
+      
+      hardware.graphics = {
+    enable = true;
+    enable32Bit = true; 
   };
 
   system.stateVersion = "25.11"; 
